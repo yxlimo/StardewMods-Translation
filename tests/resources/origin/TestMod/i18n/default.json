@@ -1,8 +1,0 @@
-{
-  "key1": "Original value 1",
-  "key2": "Original value 2",
-  "nested": {
-    "key3": "Original nested value"
-  },
-  "key4": "New key in updated version"
-}

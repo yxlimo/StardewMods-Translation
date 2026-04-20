@@ -2,7 +2,8 @@
  * 配置文件格式
  */
 export interface ModConfig {
-  baseDir: string;
+  /** 基础目录（可选，默认使用 config 文件名） */
+  baseDir?: string;
   files: FileEntry[];
 }
 
@@ -40,6 +41,7 @@ export enum FileType {
 export interface TranslationResult {
   success: boolean;
   file: string;
+  target: string;
   translatedCount: number;
   skippedCount: number;
   errors?: string[];
@@ -60,4 +62,46 @@ export interface TranslationManifest {
 export interface TranslationFileRecord {
   file: string;
   keys: string[];
+}
+
+/**
+ * Mod 信息（从 manifest.json 提取）
+ */
+export interface ModInfo {
+  name: string;
+  uniqueId: string;
+  version: string;
+  path: string;
+  i18nFiles: I18nFileInfo[];
+}
+
+/**
+ * i18n 文件信息
+ */
+export interface I18nFileInfo {
+  /** 相对于 mod 根目录的路径 */
+  relativePath: string;
+  /** default.json 的绝对路径 */
+  defaultPath: string;
+  /** zh.json 的绝对路径（可能不存在） */
+  zhPath: string | null;
+}
+
+/**
+ * Manifest 结构
+ */
+export interface Manifest {
+  Name: string;
+  Version: string;
+  UniqueID: string;
+  [key: string]: unknown;
+}
+
+/**
+ * 值差异结果
+ */
+export interface ValueDiffResult {
+  newKeys: string[];
+  changedKeys: string[];
+  unchangedKeys: string[];
 }

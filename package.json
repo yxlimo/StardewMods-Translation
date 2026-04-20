@@ -5,19 +5,24 @@
   "description": "Auto translate Stardew Valley mods based on config files",
   "scripts": {
     "test": "bun test",
-    "translate": "bun run src/index.ts translate",
+    "translate": "bun --env-file=.env run src/index.ts translate",
     "check": "bun run src/index.ts check",
-    "pack": "bun run src/index.ts pack"
+    "pack": "bun run src/index.ts pack",
+    "list": "bun run src/index.ts list"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/deep-diff": "^1.0.5",
+    "@types/node": "^25.6.0",
     "bun-types": "latest"
   },
   "dependencies": {
     "@cherrystudio/ai-core": "^2.0.1",
     "archiver": "^7.0.1",
     "commander": "^14.0.3",
+    "deep-diff": "^1.0.2",
     "fast-xml-parser": "^5.5.11",
-    "json5": "^2.2.3"
+    "json5": "^2.2.3",
+    "lodash": "^4.18.1"
   }
 }

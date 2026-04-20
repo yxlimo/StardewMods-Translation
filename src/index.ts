@@ -1,122 +1,234 @@
-import { resolve, join } from "node:path";
-import { existsSync, mkdirSync, createWriteStream, readdirSync, statSync, rmSync, renameSync } from "node:fs";
+import path from "node:path";
+import fs from "node:fs";
 import { Command } from "commander";
 import archiver from "archiver";
 import { loadConfig } from "./config";
-import { translateAllToStaging, setVerbose } from "./translator";
-import { getFileOperator } from "./fileOperator";
+import { translateI18nFile, setVerbose } from "./translator";
 import { readJsonFile } from "./fileHandler";
+import { discoverMods, generateDefaultConfig } from "./modDiscovery";
+import { needsTranslation, getModVersion, updateZhManifestVersion, ensureZhManifest, compareVersions } from "./versionManager";
 import type { TranslationResult } from "./types";
 
-const CONFIG_DIR = resolve("mods", "config");
-const DEFAULT_ORIGIN_DIR = resolve("mods", "default");
-const DEFAULT_ZH_DIR = resolve("mods", "zh");
-const TMP_DIR = ".tmp";
-const STAGING_DIR = resolve(TMP_DIR, "staging");
+const DEFAULT_ORIGIN_DIR = path.resolve("mods", "default");
+const DEFAULT_ZH_DIR = path.resolve("mods", "zh");
+
+/**
+ * 获取 origin 目录路径
+ * 优先级: CLI选项 > 环境变量 > 默认值
+ */
+function getOriginDir(options: { originDir?: string }): string {
+  return options.originDir ||
+    process.env.STARDEWMOD_TRANSLATION_ORIGIN_DIR ||
+    DEFAULT_ORIGIN_DIR;
+}
+
+/**
+ * 获取 zh 目录路径
+ * 优先级: CLI选项 > 环境变量 > 默认值
+ */
+function getZhDir(options: { zhDir?: string }): string {
+  return options.zhDir ||
+    process.env.STARDEWMOD_TRANSLATION_ZH_DIR ||
+    DEFAULT_ZH_DIR;
+}
 
 /**
  * Translate command - translate mod files
- * All files are translated to staging first, then moved to zh/ on success.
- * If any file fails, no target files are modified.
  */
-async function translate(modName: string | undefined, options: { config?: string; verbose?: boolean }): Promise<void> {
-  // Set verbose mode
+async function translate(
+  modName: string | undefined,
+  options: {
+    config?: string;
+    verbose?: boolean;
+    originDir?: string;
+    zhDir?: string;
+  }
+): Promise<void> {
   if (options.verbose) {
     setVerbose(true);
   }
 
-  let configPath: string;
-
-  if (options.config) {
-    configPath = resolve(options.config);
-  } else if (modName) {
-    configPath = resolve(CONFIG_DIR, `${modName}.json`);
-  } else {
-    console.error("Error: either <mod-name> or -c <config-path> is required");
+  if (!modName) {
+    console.error("Error: <mod-name> is required");
     return;
   }
 
-  console.log(`Loading config: ${configPath}`);
+  const originDir = getOriginDir(options);
+  const zhDir = getZhDir(options);
 
-  const config = loadConfig(configPath);
-  console.log(`Processing mod: ${config.baseDir}`);
+  // 尝试加载 config
+  const configPath = options.config || path.resolve("mods", "config", `${modName}.json`);
+  let config;
+
+  if (fs.existsSync(configPath)) {
+    console.log(`Loading config: ${configPath}`);
+    config = loadConfig(configPath);
+  } else {
+    // 无 config 时，自动发现 i18n 目录
+    console.log(`No config found, using auto-discovery for: ${modName}`);
+    const mods = discoverMods(originDir, zhDir);
+    const modInfo = mods.find((m) => m.name === modName);
+
+    if (!modInfo) {
+      console.error(`Error: Mod '${modName}' not found`);
+      return;
+    }
+
+    if (modInfo.i18nFiles.length === 0) {
+      console.error(`Error: Mod '${modName}' has no i18n directory`);
+      return;
+    }
+
+    config = generateDefaultConfig(modInfo);
+    console.log(`Auto-discovered i18n translation for: ${modName}`);
+  }
+
+  console.log(`Processing mod: ${modName}`);
+
+  // 版本检查
+  const defaultVersion = getModVersion(modName, false, originDir, zhDir);
+  const zhVersion = getModVersion(modName, true, originDir, zhDir);
+
+  if (defaultVersion && !needsTranslation(defaultVersion, zhVersion)) {
+    console.log(`Skipping ${modName}: no version change (default: ${defaultVersion}, zh: ${zhVersion})`);
+    return;
+  }
+
+  if (defaultVersion) {
+    console.log(`Version change detected: default ${defaultVersion} vs zh ${zhVersion || "none"}`);
+  }
+
   console.log(`Files to translate: ${config.files.length}`);
   console.log("");
 
-  // Create staging directory
-  mkdirSync(STAGING_DIR, { recursive: true });
+  // 确保 zh manifest 存在
+  ensureZhManifest(modName, originDir, zhDir);
 
-  try {
-    // 一次性翻译所有文件到 staging（调用一次 LLM）
-    const results = await translateAllToStaging(config.baseDir, config.files, STAGING_DIR);
+  const results: TranslationResult[] = [];
 
-    for (const result of results) {
-      const status = result.success ? "✓" : "✗";
-      console.log(
-        `${status} ${result.file}: ${result.translatedCount} translated, ${result.skippedCount} skipped`
-      );
+  for (const entry of config.files) {
+    const originPath = path.resolve(originDir, modName, entry.file);
+    const targetPath = path.resolve(zhDir, modName, entry.target);
 
-      if (result.errors && result.errors.length > 0) {
-        for (const error of result.errors) {
-          console.log(`  Error: ${error}`);
-        }
-      }
+    const result: TranslationResult = {
+      success: false,
+      file: entry.file,
+      target: entry.target,
+      translatedCount: 0,
+      skippedCount: 0,
+      errors: [],
+    };
 
-      // If any file fails, terminate without modifying target files
-      if (!result.success) {
-        console.log("\nTranslation failed, cleaning up staging directory...");
-        rmSync(TMP_DIR, { recursive: true, force: true });
-        throw new Error(`Translation failed for ${result.file}`);
-      }
+    try {
+      await translateI18nFile(originPath, targetPath, result);
+      result.success = true;
+    } catch (e) {
+      result.errors = [String(e)];
+      console.error(`Error translating ${entry.file}: ${e}`);
     }
 
-    // All files translated successfully, move staging to zh/
-    const zhDir = resolve(DEFAULT_ZH_DIR, config.baseDir);
-    const stagingModDir = resolve(STAGING_DIR, config.baseDir);
+    results.push(result);
 
-    if (existsSync(zhDir)) {
-      rmSync(zhDir, { recursive: true, force: true });
-    }
-    renameSync(stagingModDir, zhDir);
-
-    console.log("");
-    console.log("Summary:");
-    const totalTranslated = results.reduce((sum, r) => sum + r.translatedCount, 0);
-    const totalSkipped = results.reduce((sum, r) => sum + r.skippedCount, 0);
-    const totalErrors = results.reduce(
-      (sum, r) => sum + (r.errors?.length || 0),
-      0
+    const status = result.success ? "✓" : "✗";
+    console.log(
+      `${status} ${result.file}: ${result.translatedCount} translated, ${result.skippedCount} skipped`
     );
-    console.log(`  Total translated: ${totalTranslated}`);
-    console.log(`  Total skipped: ${totalSkipped}`);
-    console.log(`  Total errors: ${totalErrors}`);
-  } finally {
-    // Always clean up staging directory
-    if (existsSync(TMP_DIR)) {
-      rmSync(TMP_DIR, { recursive: true, force: true });
+
+    if (result.errors && result.errors.length > 0) {
+      for (const error of result.errors) {
+        console.log(`  Error: ${error}`);
+      }
     }
+  }
+
+  // 更新 zh manifest 版本
+  if (defaultVersion) {
+    updateZhManifestVersion(modName, defaultVersion, zhDir);
+  }
+
+  console.log("");
+  console.log("Summary:");
+  const totalTranslated = results.reduce((sum, r) => sum + r.translatedCount, 0);
+  const totalSkipped = results.reduce((sum, r) => sum + r.skippedCount, 0);
+  const totalErrors = results.reduce(
+    (sum, r) => sum + (r.errors?.length || 0),
+    0
+  );
+  console.log(`  Total translated: ${totalTranslated}`);
+  console.log(`  Total skipped: ${totalSkipped}`);
+  console.log(`  Total errors: ${totalErrors}`);
+}
+
+/**
+ * List command - show all discoverable mods
+ */
+function listMods(options: { originDir?: string; zhDir?: string }): void {
+  const originDir = getOriginDir(options);
+  const zhDir = getZhDir(options);
+  const mods = discoverMods(originDir, zhDir);
+
+  console.log("Discoverable mods:\n");
+
+  for (const mod of mods) {
+    const zhVersion = getModVersion(mod.name, true, originDir, zhDir);
+    const needsUpdate = !zhVersion || compareVersions(mod.version, zhVersion) > 0;
+
+    console.log(`  ${mod.name}`);
+    console.log(`    Version: ${mod.version}`);
+    console.log(`    UniqueID: ${mod.uniqueId}`);
+    console.log(`    i18n files (${mod.i18nFiles.length}):`);
+    for (const i18n of mod.i18nFiles) {
+      console.log(`      - ${i18n.relativePath}/default.json`);
+    }
+    console.log(`    zh version: ${zhVersion || "none"}`);
+    console.log(`    Needs translation: ${needsUpdate ? "yes" : "no (up to date)"}`);
+    console.log("");
   }
 }
 
 /**
  * Check command - list all keys that would be translated
  */
-function check(modName: string | undefined, options: { config?: string }): void {
-  let configPath: string;
+function check(
+  modName: string | undefined,
+  options: {
+    config?: string;
+    originDir?: string;
+    zhDir?: string;
+  }
+): void {
+  const originDir = getOriginDir(options);
+  const zhDir = getZhDir(options);
 
-  if (options.config) {
-    configPath = resolve(options.config);
-  } else if (modName) {
-    configPath = resolve(CONFIG_DIR, `${modName}.json`);
-  } else {
-    console.error("Error: either <mod-name> or -c <config-path> is required");
+  if (!modName) {
+    console.error("Error: <mod-name> is required");
     return;
   }
 
-  console.log(`Loading config: ${configPath}\n`);
+  const configPath = options.config || path.resolve("mods", "config", `${modName}.json`);
+  let config;
 
-  const config = loadConfig(configPath);
-  const baseOriginDir = DEFAULT_ORIGIN_DIR;
+  if (fs.existsSync(configPath)) {
+    console.log(`Loading config: ${configPath}\n`);
+    config = loadConfig(configPath);
+  } else {
+    console.log(`No config found, using auto-discovery for: ${modName}`);
+    const mods = discoverMods(originDir, zhDir);
+    const modInfo = mods.find((m) => m.name === modName);
+
+    if (!modInfo) {
+      console.error(`Error: Mod '${modName}' not found`);
+      return;
+    }
+
+    if (modInfo.i18nFiles.length === 0) {
+      console.error(`Error: Mod '${modName}' has no i18n directory`);
+      return;
+    }
+
+    config = generateDefaultConfig(modInfo);
+    console.log(`Auto-discovered i18n check for: ${modName}\n`);
+  }
 
   let totalKeys = 0;
 
@@ -125,17 +237,15 @@ function check(modName: string | undefined, options: { config?: string }): void 
       continue;
     }
 
-    const fileType = config.files[0] ? entry.file : entry.file;
-    const originPath = resolve(baseOriginDir, config.baseDir, entry.file);
+    const fileType = entry.file;
+    const originPath = path.resolve(originDir, modName, entry.file);
 
-    // Skip non-JSON files for now
     if (!entry.file.endsWith(".json")) {
       console.log(`[${entry.file}]`);
       console.log(`  (TMX files not supported for check)\n`);
       continue;
     }
 
-    const operator = getFileOperator("json");
     const originData = readJsonFile(originPath);
 
     if (!originData) {
@@ -147,18 +257,15 @@ function check(modName: string | undefined, options: { config?: string }): void 
     console.log(`[${entry.file}]`);
 
     for (const keyPattern of entry.translateKeys) {
-      const results = operator.query(originData, keyPattern);
-      totalKeys += results.length;
-
-      for (const { path, value } of results) {
+      if (_.has(originData, keyPattern)) {
+        const value = _.get(originData, keyPattern);
         const displayValue = typeof value === "string" && value.length > 50
           ? value.slice(0, 50) + "..."
           : value;
-        console.log(`  ${path}`);
+        console.log(`  ${keyPattern}`);
         console.log(`    = ${displayValue}`);
-      }
-
-      if (results.length === 0) {
+        totalKeys++;
+      } else {
         console.log(`  ${keyPattern} (no matches)`);
       }
     }
@@ -171,47 +278,41 @@ function check(modName: string | undefined, options: { config?: string }): void 
 /**
  * Pack command - create zip archive of translated mod files
  */
-async function pack(modName: string | undefined): Promise<void> {
+async function pack(modName: string | undefined, options: { zhDir?: string }): Promise<void> {
+  const zhDir = getZhDir(options);
+
   if (!modName) {
     console.error("Error: <mod-name> is required");
     return;
   }
 
-  const configPath = resolve(CONFIG_DIR, `${modName}.json`);
-  if (!existsSync(configPath)) {
-    console.error(`Error: Config file '${configPath}' not found`);
-    return;
-  }
+  const zhSource = path.resolve(zhDir, modName);
 
-  const config = loadConfig(configPath);
-  const zhSource = resolve("mods", "zh", config.baseDir);
-  const distDir = resolve("mods", "release");
-  const outputZip = resolve(distDir, `${modName}.zip`);
-
-  if (!existsSync(zhSource)) {
+  if (!fs.existsSync(zhSource)) {
     console.error(`Error: Source directory '${zhSource}' not found`);
     return;
   }
 
-  mkdirSync(distDir, { recursive: true });
+  const distDir = path.resolve("mods", "release");
+  const outputZip = path.resolve(distDir, `${modName}.zip`);
+
+  fs.mkdirSync(distDir, { recursive: true });
 
   console.log(`Packing ${modName}...`);
 
-  // 使用 archiver 创建 zip
-  const output = createWriteStream(outputZip);
+  const output = fs.createWriteStream(outputZip);
   const archive = archiver("zip", { zlib: { level: 9 } });
 
   archive.pipe(output);
 
-  // 递归添加目录，排除 README.md
   function addDirToArchive(dirPath: string, arcPath: string): void {
-    const entries = readdirSync(dirPath);
+    const entries = fs.readdirSync(dirPath);
     for (const entry of entries) {
-      if (entry === "README.md") continue;
+      if (entry === "README.md" || entry === "manifest.json") continue;
 
-      const fullPath = join(dirPath, entry);
+      const fullPath = path.join(dirPath, entry);
       const entryArcPath = arcPath ? `${arcPath}/${entry}` : entry;
-      const stat = statSync(fullPath);
+      const stat = fs.statSync(fullPath);
 
       if (stat.isDirectory()) {
         addDirToArchive(fullPath, entryArcPath);
@@ -239,23 +340,34 @@ async function main(): Promise<void> {
 
   program
     .command("translate [mod-name]")
-    .description("Translate mod files")
+    .description("Translate mod files (auto-discovers i18n if no config)")
     .option("-c, --config <path>", "Specify config file path")
+    .option("--origin-dir <path>", "Specify origin (default) directory")
+    .option("--zh-dir <path>", "Specify zh translation directory")
     .option("-v, --verbose", "Enable verbose logging")
     .action(translate);
+
+  program
+    .command("list")
+    .description("List all discoverable mods")
+    .option("--origin-dir <path>", "Specify origin (default) directory")
+    .option("--zh-dir <path>", "Specify zh translation directory")
+    .action(listMods);
 
   program
     .command("check [mod-name]")
     .description("List all keys that would be translated")
     .option("-c, --config <path>", "Specify config file path")
+    .option("--origin-dir <path>", "Specify origin (default) directory")
+    .option("--zh-dir <path>", "Specify zh translation directory")
     .action(check);
 
   program
     .command("pack <mod-name>")
-    .description("Pack translated mod files into zip archive")
+    .description("Pack translated mod files into zip archive (ignores manifest.json)")
+    .option("--zh-dir <path>", "Specify zh translation directory")
     .action(pack);
 
-  // Default command if no subcommand provided
   if (process.argv.length <= 2) {
     program.parse(["node", "translator", ...process.argv.slice(2)]);
   } else {

@@ -1,0 +1,8 @@
+{
+  "files": [
+    {
+      "file": "Data/content.json",
+      "target": "Data/content.json"
+    }
+  ]
+}

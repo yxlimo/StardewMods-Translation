@@ -1,16 +1,17 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import fs from "node:fs";
+import path from "node:path";
 import JSON5 from "json5";
 import { FileType } from "./types";
 
 /**
  * 读取 JSON 文件（支持 JSON5 注释格式）
+ * 文件不存在或 JSON 不合法时抛出异常
  */
-export function readJsonFile<T>(filePath: string): T | null {
-  if (!existsSync(filePath)) {
-    return null;
+export function readJsonFile<T>(filePath: string): T {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
   }
-  const content = readFileSync(filePath, "utf-8");
+  const content = fs.readFileSync(filePath, "utf-8");
   return JSON5.parse(content) as T;
 }
 
@@ -18,9 +19,9 @@ export function readJsonFile<T>(filePath: string): T | null {
  * 写入 JSON 文件
  */
 export function writeJsonFile<T>(filePath: string, data: T): void {
-  const dir = resolve(filePath, "..");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  const dir = path.resolve(filePath, "..");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 }
 
 /**

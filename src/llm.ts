@@ -1,5 +1,3 @@
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
 import { generateText } from "@cherrystudio/ai-core";
 import type { GenerateTextResult } from "@cherrystudio/ai-core";
 
@@ -40,47 +38,32 @@ export function clearMockTranslations(): void {
 }
 
 /**
- * 加载 .env 配置
+ * 加载环境变量配置
  */
 function loadConfig(): LLMConfig {
   if (config) {
     return config;
   }
 
-  const envPath = resolve(process.cwd(), "..", ".env");
-  const envContent = existsSync(envPath) ? readFileSync(envPath, "utf-8") : "";
-
-  const envVars: Record<string, string> = {};
-  for (const line of envContent.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const [key, ...valueParts] = trimmed.split("=");
-    if (key && valueParts.length > 0) {
-      envVars[key] = valueParts.join("=");
-    }
-  }
-
-  const baseURL = envVars["ANTHROPIC_BASE_URL"];
-  const apiKey = envVars["ANTHROPIC_API_KEY"];
-  const model = envVars["ANTHROPIC_MODEL"];
+  const baseURL = process.env["STARDEW_TRANSLATION_ANTHROPIC_BASE_URL"];
+  const apiKey = process.env["STARDEW_TRANSLATION_ANTHROPIC_API_KEY"];
+  const model = process.env["STARDEW_TRANSLATION_ANTHROPIC_MODEL"];
 
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is required in .env file");
+    throw new Error("STARDEW_TRANSLATION_ANTHROPIC_API_KEY is required in environment");
   }
   if (!baseURL) {
-    throw new Error("ANTHROPIC_BASE_URL is required in .env file");
+    throw new Error("STARDEW_TRANSLATION_ANTHROPIC_BASE_URL is required in environment");
   }
   if (!model) {
-    throw new Error("ANTHROPIC_MODEL is required in .env file");
+    throw new Error("STARDEW_TRANSLATION_ANTHROPIC_MODEL is required in environment");
   }
 
   // 验证 URL 格式
   try {
     new URL(baseURL);
   } catch {
-    throw new Error(`Invalid ANTHROPIC_BASE_URL: ${baseURL}`);
+    throw new Error(`Invalid STARDEW_TRANSLATION_ANTHROPIC_BASE_URL: ${baseURL}`);
   }
 
   config = {
@@ -156,7 +139,7 @@ export async function translateWithLLM(
   const messages = [
     {
       role: "user",
-      content: `Translate the following text from ${from} to ${to}. Only output the translation, nothing else.\n\n${text}`,
+      content: `你是一个专业的翻译者，擅长翻译游戏文本。情翻译以下文本 ${from} 到 ${to}. 只输出翻译结果，不要输出其他内容。\n\n${text}`,
     },
   ];
 
