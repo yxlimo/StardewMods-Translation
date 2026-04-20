@@ -1,0 +1,23 @@
+{
+  "name": "stardew-translator",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Auto translate Stardew Valley mods based on config files",
+  "scripts": {
+    "test": "bun test",
+    "translate": "bun run src/index.ts translate",
+    "check": "bun run src/index.ts check",
+    "pack": "bun run src/index.ts pack"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "bun-types": "latest"
+  },
+  "dependencies": {
+    "@cherrystudio/ai-core": "^2.0.1",
+    "archiver": "^7.0.1",
+    "commander": "^14.0.3",
+    "fast-xml-parser": "^5.5.11",
+    "json5": "^2.2.3"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "file": "Data/config.json",
+      "keys": [
+        "ConfigSchema.Option1.Description"
+      ]
+    }
+  ]
+}

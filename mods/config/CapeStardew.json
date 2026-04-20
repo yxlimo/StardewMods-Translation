@@ -1,0 +1,47 @@
+{
+  "baseDir": "Cape Stardew 1.6",
+  "files": [
+    {
+      "file": "(CP)OrbOfTheTides/i18n/default.json",
+      "target": "(CP)OrbOfTheTides/i18n/zh.json"
+    },
+    {
+      "file": "[CP]Annetta/i18n/default.json",
+      "target": "[CP]Annetta/i18n/zh.json"
+    },
+    {
+      "file": "[CP]Annetta/content.json",
+      "target": "[CP]Annetta/content.json",
+      "translateKeys": [
+        "ConfigSchema.AnnettaPortraitStyle.Description"
+      ]
+    },
+    {
+      "file": "CapeStardewCode/i18n/default.json",
+      "target": "CapeStardewCode/i18n/zh.json"
+    },
+    {
+      "file": "Cape Stardew/i18n/default.json",
+      "target": "Cape Stardew/i18n/zh.json"
+    },
+    {
+      "file": "Cape Stardew/Data/CapeMineCartData.json",
+      "target": "Cape Stardew/Data/CapeMineCartData.json",
+      "translateAll": false,
+      "translateKeys": [
+        "Changes(*).Entries.CapeBusStop.ChooseDestinationMessage",
+        "Changes(*).Entries[\"dreamy.kickitspot_CapeSeaCavern\"].ChooseDestinationMessage",
+        "Changes(*).Entries[\"dreamy.kickitspot_CapeForest\"].ChooseDestinationMessage"
+      ]
+    },
+    {
+      "file": "Cape Stardew/Data/CapeShops.json",
+      "target": "Cape Stardew/Data/CapeShops.json",
+      "translateAll": false,
+      "translateKeys": [
+        "Changes(*).Entries[\"dreamy.kickitspot_jellishop\"].Owners[*].Dialogues[*].Dialogue",
+        "Changes(*).Entries[\"dreamy.kickitspot_jellishop2\"].Owners[*].Dialogues[*].Dialogue"
+      ]
+    }
+  ]
+}

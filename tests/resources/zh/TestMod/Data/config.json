@@ -1,0 +1,19 @@
+{
+  "ConfigSchema": {
+    "Option1": {
+      "Description": "选项 1 描述"
+    },
+    "Option2": {
+      "Description": "Option 2 description"
+    }
+  },
+  "Changes": [
+    {
+      "Entries": [
+        {
+          "ChooseDestinationMessage": "Please choose destination"
+        }
+      ]
+    }
+  ]
+}

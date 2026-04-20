@@ -1,0 +1,57 @@
+{
+  // Cape Stardew Mine Cart Data
+  "Changes": [
+    {
+      // Bus stop destination
+      "Entries": {
+        "CapeBusStop": {
+          "ChooseDestinationMessage": "EnglishMessageToTranslate"
+        }
+      }
+    },
+    {
+      // Sea cavern with lock
+      "Entries": {
+        "dreamy.kickitspot_CapeSeaCavern": {
+          "LockedMessage": "EnglishMessageToTranslate",
+          "ChooseDestinationMessage": "EnglishMessageToTranslate"
+        }
+      }
+    },
+    {
+      // Jelli shop entries
+      "Action": "EditData",
+      "Target": "Data/Shops",
+      "Entries": {
+        "dreamy.kickitspot_jellishop": {
+          "Owners": [
+            {
+              "Name": "Jelli",
+              "Condition": "PLAYER_FRIENDSHIP_POINTS Current Jelli 80",
+              "Portrait": "Jelli",
+              "Dialogues": [
+                {
+                  "Id": "dreamy.kickitspot_Jelli",
+                  "Dialogue": "EnglishMessageToTranslate"
+                }
+              ]
+            }
+          ]
+        },
+        "dreamy.kickitspot_jellishop2": {
+          "Owners": [
+            {
+              "Name": "Jelli",
+              "Dialogues": [
+                {
+                  "Id": "dreamy.kickitspot_Jelli",
+                  "Dialogue": "EnglishMessageToTranslate"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

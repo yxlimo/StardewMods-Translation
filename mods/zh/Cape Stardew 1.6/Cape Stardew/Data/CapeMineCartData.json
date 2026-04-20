@@ -1,0 +1,143 @@
+{
+  "Changes": [
+    {
+      "Action": "EditData",
+      "Target": "Data/Minecarts",
+      "Entries": {
+        "CapeBusStop": {
+          "ChooseDestinationMessage": "回到农场吗？",
+          "Destinations": [
+            {
+              "Id": "BusStopfromCape",
+              "TargetLocation": "BusStop",
+              "TargetTile": {
+                "X": 22,
+                "Y": 10
+              },
+              "TargetDirection": "down",
+              "DisplayName": "[LocationName BusStop]",
+              "Price": 100
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Action": "EditData",
+      "Target": "Data/Minecarts",
+      "TargetField": [
+        "Default",
+        "Destinations"
+      ],
+      "Entries": {
+        "dreamy.kickitspot_CapeSeaCavern": {
+          "Id": "SeaCaveSecrets",
+          "DisplayName": "[LocationName dreamy.kickitspot_SeaCaveSecrets]",
+          "Condition": "LOCATION_ACCESSIBLE Custom_SeaCaveSecrets",
+          "TargetLocation": "Custom_SeaCaveSecrets",
+          "TargetTile": {
+            "X": 4,
+            "Y": 8
+          },
+          "TargetDirection": "down",
+          "UnlockCondition": "PLAYER_HAS_MAIL Any MidnightBlue Received",
+          "LockedMessage": "Out of order",
+          "ChooseDestinationMessage": "选择目的地："
+        }
+      },
+      "When": {
+        "HasFlag": "MidnightBlue",
+        "Enable_Cape_Minecart": "true"
+      }
+    },
+    {
+      "Action": "EditData",
+      "Target": "Data/Minecarts",
+      "When": {
+        "HasSeenEvent": "146358809"
+      },
+      "TargetField": [
+        "Default",
+        "Destinations"
+      ],
+      "Entries": {
+        "dreamy.kickitspot_CapeForest": {
+          "Id": "CapeForest",
+          "DisplayName": "[LocationName dreamy.kickitspot_CapeMineCart]",
+          "Condition": "PLAYER_VISITED_LOCATION Current Custom_CapeMineCart",
+          "TargetLocation": "Custom_CapeMineCart",
+          "TargetTile": {
+            "X": 21,
+            "Y": 14
+          },
+          "TargetDirection": "down",
+          "LockedMessage": "Out of order",
+          "ChooseDestinationMessage": "选择目的地："
+        }
+      }
+    },
+    {
+      "Action": "EditMap",
+      "Target": "Maps/Custom_SeaCaveSecrets",
+      "FromFile": "assets/SeaCaveSecretsUnlocked.tmx",
+      "ToArea": {
+        "X": 0,
+        "Y": 0,
+        "Width": 28,
+        "Height": 25
+      },
+      "PatchMode": "ReplaceByLayer",
+      "When": {
+        "HasFlag": "MidnightBlue"
+      },
+      "Update": "OnLocationChange,OnDayStart"
+    },
+    {
+      "Action": "EditMap",
+      "Target": "Maps/Custom_SeaCaveSecrets",
+      "MapTiles": [
+        {
+          "Position": {
+            "X": 4,
+            "Y": 7
+          },
+          "Layer": "Buildings",
+          "SetProperties": {
+            "Action": "MinecartTransport Default SeaCaveSecrets"
+          }
+        },
+        {
+          "Position": {
+            "X": 3,
+            "Y": 7
+          },
+          "Layer": "Buildings",
+          "SetProperties": {
+            "Action": "MinecartTransport Default SeaCaveSecrets"
+          }
+        }
+      ],
+      "When": {
+        "Enable_Cape_Minecart": "true"
+      },
+      "Update": "OnLocationChange"
+    },
+    {
+      "Action": "EditMap",
+      "Target": "Maps/Custom_CapeMineCart",
+      "Update": "OnLocationChange",
+      "MapTiles": [
+        {
+          "Position": {
+            "X": 22,
+            "Y": 14
+          },
+          "Layer": "Buildings",
+          "SetProperties": {
+            "Action": "MinecartTransport Default CapeForest"
+          }
+        }
+      ]
+    }
+  ]
+}

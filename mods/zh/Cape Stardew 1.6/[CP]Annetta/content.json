@@ -1,0 +1,33 @@
+{
+  "Format": "2.8.0",
+  "ConfigSchema": {
+    "AnnettaPortraitStyle": {
+      "AllowValues": "Front, AlternativeFront, 3/4(original), None(other)",
+      "Default": "Front",
+      "Description": "将安妮塔的默认头像进行切换"
+    }
+  },
+  "DynamicTokens": [
+    {
+      "Name": "AnnettaCoastalOrder",
+      "Value": "{{HasFlag: currentPlayer, hostPlayer, anyPlayer |contains=AnetCoastalOrder}}"
+    }
+  ],
+  "Changes": [
+    {
+      "LogName": "NPC Characters1",
+      "Action": "Include",
+      "FromFile": "Data/NPCData.json"
+    },
+    {
+      "LogName": "NPC Characters2",
+      "Action": "Include",
+      "FromFile": "Data/Characters.json"
+    },
+    {
+      "Action": "Load",
+      "Target": "TileSheets/AnnettaIcon",
+      "FromFile": "assets/AnnettaIcon.png"
+    }
+  ]
+}

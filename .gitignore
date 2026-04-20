@@ -137,3 +137,11 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# translation mid files
+mods/default
+mods/release
+
+# agents files
+.agents/skills
+.claude/skills

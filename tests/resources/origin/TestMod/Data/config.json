@@ -1,0 +1,19 @@
+{
+  "ConfigSchema": {
+    "Option1": {
+      "Description": "Option 1 description"
+    },
+    "Option2": {
+      "Description": "Option 2 description"
+    }
+  },
+  "Changes": [
+    {
+      "Entries": [
+        {
+          "ChooseDestinationMessage": "Please choose destination"
+        }
+      ]
+    }
+  ]
+}
