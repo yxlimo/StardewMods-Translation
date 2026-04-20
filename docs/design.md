@@ -8,31 +8,100 @@
 
 ```
 ChineseTranslation/
-├── src/                      # TypeScript 源代码
+├── src/
 │   ├── index.ts             # CLI 入口
 │   ├── translator.ts        # 核心翻译逻辑
-│   ├── fileHandler.ts       # 文件处理（JSON/TMX等）
+│   ├── fileHandler.ts       # 文件读写
 │   ├── config.ts            # 配置文件解析
-│   ├── diff.ts              # 增量对比逻辑
+│   ├── diff.ts              # 值差异检测
 │   ├── llm.ts               # LLM API 调用（含 mock 模式）
+│   ├── modDiscovery.ts      # 自动发现 mods
+│   ├── versionManager.ts    # 版本管理
 │   └── types.ts             # 类型定义
 ├── tests/                   # bun:test 测试
-│   └── translator.test.ts
 ├── docs/
 │   └── design.md            # 本文档
 ├── mods/
-│   ├── config/              # 模组配置文件
+│   ├── config/              # 模组配置文件（可选）
 │   ├── default/             # 原始 mod 文件
 │   ├── zh/                  # 翻译后的文件
 │   └── release/             # 打包输出目录
-├── build_release.sh         # 打包脚本
 ├── package.json
 └── tsconfig.json
 ```
 
+## 核心概念
+
+### zh.json.default - 翻译前的英文原版备份
+
+翻译完成后，`i18n/default.json` 会被复制为 `i18n/zh.json.default`。这是翻译前的英文原版备份，用于下次翻译时做 diff。
+
+### 值差异检测（Value Diff）
+
+diff 比对的是 `default.json` vs `zh.json.default`，检测值是否变化：
+- **newKeys**: default 有但 zh.default 没有 → 新增 key，需要翻译
+- **changedKeys**: 两者都有但值不同 → 变更 key，需要重新翻译
+- **unchangedKeys**: 两者都有且值相同 → 沿用 zh.json 的翻译
+
+### config.json 定位
+
+config.json 是**补充配置**，非必须：
+- 用于指定需要翻译的**额外 json 文件**（非 i18n 目录）
+- 不管有没有 config，都会自动扫描 i18n 目录
+
+## i18n 翻译流程
+
+```
+1. 读取 i18n/default.json（英文原版）
+2. 读取 i18n/zh.json（如存在，已翻译版本）
+3. 读取 i18n/zh.json.default（如存在，上次翻译时的英文原版）
+
+条件判断：
+- zh.json 不存在 → 全新翻译，所有 key 都翻译
+- zh.json 存在但 zh.json.default 不存在 → 报错（数据不一致）
+- zh.json.default 存在 → 进行值差异检测
+
+4. 比较 default.json vs zh.json.default：
+   - 值变了 → 重新翻译
+   - 值没变 → 延用 zh.json 的翻译
+
+5. 翻译完成后：
+   - 写入 i18n/zh.json（中文翻译）
+   - 复制 default.json → zh.json.default（备份）
+```
+
+## manifest.json 版本对比
+
+```
+1. 读取 default/manifest.json 的 Version → defaultVersion
+2. 读取 zh/manifest.json 的 Version → zhVersion（如存在）
+3. 比较：defaultVersion > zhVersion?
+   - 否 → 跳过（无新版本）
+   - 是 → 继续翻译
+4. 翻译完成后更新 zh/manifest.json 的 Version = defaultVersion
+```
+
+## CLI 命令
+
+```bash
+bun run translate <mod-name>     # 翻译模组（自动发现 i18n）
+bun run list                     # 列出可发现的模组
+bun run check <mod-name>         # 查看会翻译哪些 key
+bun run pack <mod-name>          # 打包成 zip
+```
+
+### 环境变量
+
+```env
+STARDEW_TRANSLATION_ANTHROPIC_API_KEY=your_key
+STARDEW_TRANSLATION_ANTHROPIC_MODEL=claude-sonnet-4
+STARDEWMOD_TRANSLATION_ORIGIN_DIR=mods/default
+STARDEWMOD_TRANSLATION_ZH_DIR=mods/zh
+```
+
 ## 配置文件格式
 
-配置文件位于 `mods/config/` 目录，每个模组一个 JSON 文件：
+配置文件位于 `mods/config/` 目录（可选）：
 
 ```json
 {
@@ -40,97 +109,7 @@ ChineseTranslation/
   "files": [
     {
       "file": "i18n/default.json",
-      "target": "i18n/zh.json",
-      "translateAll": true
-    }
-  ]
-}
-```
-
-### 字段说明
-
-| 字段 | 说明 |
-|------|------|
-| `baseDir` | 模组文件夹名，指向 `mods/default/` 和 `mods/zh/` 下的子目录 |
-| `files` | 需要翻译的文件列表 |
-| `file` | 原始文件路径（相对于 `mods/default/{baseDir}/`） |
-| `target` | 翻译后文件路径（相对于 `mods/zh/{baseDir}/`） |
-| `translateAll` | 是否全量翻译（默认 false） |
-| `translateKeys` | 使用 jsonpath 匹配的 key 列表 |
-
-## LLM 翻译
-
-### 环境配置
-
-在项目根目录 `.env` 文件中配置：
-
-```env
-OPENAI_URL=https://api.kimi.com/coding/v1
-OPENAI_API_KEY=your_api_key
-OPENAI_MODEL=K2.5
-```
-
-### llm.ts
-
-- `translateWithLLM(text, from, to)`: 翻译单个文本
-- `translateBatch(texts, from, to)`: 批量翻译文本
-- `setMockMode(enabled)`: 启用/禁用测试模式
-- `setMockTranslation(input, output)`: 设置固定翻译映射
-- `parseTranslationResult()`: 清理 AI 返回结果（移除 thinking 标签、编号等）
-
-### 测试模式
-
-测试时不调用真实 LLM API，使用 mock 模式返回预设翻译：
-
-```typescript
-import { setMockMode, setMockTranslation } from "./llm";
-
-setMockMode(true);
-setMockTranslation("Hello", "你好");
-```
-
-## 文件类型处理
-
-### 1. i18n/default.json（全量翻译）
-
-- 读取 `mods/default/{baseDir}/i18n/default.json`
-- 对比 `mods/zh/{baseDir}/i18n/zh.json`（旧版本）
-- 找出新增或修改的 key
-- 调用 LLM 翻译新增 key
-- 将增量合并到目标文件
-
-### 2. 其他 JSON 文件（按 key 翻译）
-
-- 读取 `mods/default/{baseDir}/{file}`（原始文件）
-- 读取 `mods/zh/{baseDir}/translation.json` 获取已翻译的 key
-- 根据 `translateKeys` 使用 ts-jsonpath 匹配需要翻译的内容
-- 从 `mods/zh/{baseDir}/{target}` 取出已翻译的值
-- 调用 LLM 翻译未翻译的 key
-- 覆盖原始文件内容后输出到目标路径
-
-### 3. TMX 文件（XML 格式）
-
-使用 `fast-xml-parser` 的 XPath 功能直接操作 XML：
-
-- 读取 `mods/default/{baseDir}/{file}`（原始 XML 内容）
-- 使用 XPath 查询需要翻译的节点
-- 根据 `translateKeys` 匹配需要翻译的内容
-- 从 `mods/zh/{baseDir}/{target}` 取出已翻译的值
-- 直接修改 XML 节点内容
-- 输出到目标路径
-- **注意**：直接操作 XML 节点，不转换成 JSON，防止二进制内容丢失
-
-## translation.json 格式
-
-记录已翻译过的 key（使用 jsonpath 语法）：
-
-```json
-{
-  "version": "1.7.3",
-  "files": [
-    {
-      "file": "[CP]Annetta/content.json",
-      "keys": ["ConfigSchema.AnnettaPortraitStyle.Description"]
+      "target": "i18n/zh.json"
     }
   ]
 }
@@ -138,90 +117,44 @@ setMockTranslation("Hello", "你好");
 
 ## 核心模块
 
-### types.ts
+### translator.ts
 
-类型定义：
-
-```typescript
-enum FileType {
-  I18nDefault = "i18n/default.json",  // 全量翻译
-  Json = "json",                        // 按 key 翻译
-  Tmx = "tmx",                          // XML 格式
-  Unknown = "unknown",
-}
-```
-
-### config.ts
-
-- `loadConfig()`: 加载配置文件
-- `getFileType()`: 判断文件类型
-- `getOriginPath()`: 获取原始文件路径
-- `getTargetPath()`: 获取目标文件路径
-- `loadTranslationManifest()`: 加载 translation.json
-
-### fileHandler.ts
-
-- `readJsonFile()`: 读取 JSON 文件
-- `writeJsonFile()`: 写入 JSON 文件
-- `readTmxFile()`: 读取 TMX 文件（XML）
-- `writeTmxFile()`: 写入 TMX 文件
+- `translateI18nFile(originPath, targetPath, result)`: 翻译 i18n 文件
+  - 读取 zh.json.default 做值差异检测
+  - 翻译新增/变更的 key
+  - 沿用未变更 key 的现有翻译
+  - 写入目标文件并备份 default.json
 
 ### diff.ts
 
-- `computeJsonDiff()`: 计算新旧文件的增量 key
-- `getTranslatedKeysFromManifest()`: 获取已翻译的 key
-- `getNewTranslationKeys()`: 获取新增的翻译 key
+- `computeValueDiff(defaultData, zhDefaultData)`: 使用 deep-diff 计算值级别差异
+  - 返回 `{ newKeys, changedKeys, unchangedKeys }`
 
-### llm.ts
+### versionManager.ts
 
-- `translateWithLLM()`: 翻译单个文本
-- `translateBatch()`: 批量翻译文本
-- `setMockMode()`: 设置测试模式
-- `setMockTranslation()`: 设置固定翻译映射
-- `parseTranslationResult()`: 清理 AI 返回结果
+- `compareVersions(v1, v2)`: 比较 semver 版本
+- `needsTranslation(defaultVersion, zhVersion)`: 判断是否需要翻译
+- `getModVersion(baseDir, isZh, originDir, zhDir)`: 获取模组版本
+- `updateZhManifestVersion(baseDir, newVersion, zhDir)`: 更新 zh manifest 版本
 
-### translator.ts
+### modDiscovery.ts
 
-- `translateFile()`: 翻译单个文件（async）
-- `translateI18nFile()`: 翻译 i18n 文件（async）
-- `translateJsonFile()`: 翻译普通 JSON 文件（async）
-- `translateTmxFile()`: 翻译 TMX 文件
+- `discoverMods(originDir, zhDir)`: 自动发现 mods/default 下的模组
+- `generateDefaultConfig(modInfo)`: 为模组生成默认配置（仅 i18n）
 
-### index.ts
-
-CLI 入口，支持：
+## 测试
 
 ```bash
-bun run src/index.ts                           # 翻译所有配置
-bun run src/index.ts mods/config/DeluxeGrabberFix.json  # 翻译指定配置
+bun test           # 运行所有测试
 ```
 
-## 技术栈
-
-- **运行时**: Bun
-- **语言**: TypeScript
-- **测试**: bun:test
-- **依赖**:
-  - `ts-jsonpath`: JSON path 解析
-  - `fast-xml-parser`: XML 解析
-
-## 使用示例
-
-```bash
-# 安装依赖
-bun install
-
-# 运行测试
-bun test
-
-# 执行翻译
-bun run translate mods/config/DeluxeGrabberFix.json
-
-# 打包翻译文件
-bun run pack DeluxeGrabberFix
-```
+测试覆盖：
+- 值差异检测逻辑
+- 版本比较逻辑
+- 翻译流程（新增/变更/不变 key 的处理）
 
 ## 错误处理
 
 - LLM API 调用失败时，程序终止，不写入文件
+- zh.json 存在但 zh.json.default 不存在时报错
 - 翻译结果自动清理 AI 多余输出（thinking 标签、编号等）
