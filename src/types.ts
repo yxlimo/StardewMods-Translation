@@ -73,6 +73,7 @@ export interface ModInfo {
   version: string;
   path: string;
   i18nFiles: I18nFileInfo[];
+  updateKeys?: string[];
 }
 
 /**
@@ -94,6 +95,7 @@ export interface Manifest {
   Name: string;
   Version: string;
   UniqueID: string;
+  UpdateKeys?: string[];
   [key: string]: unknown;
 }
 

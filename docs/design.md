@@ -95,8 +95,8 @@ bun run pack <mod-name>          # 打包成 zip
 ```env
 STARDEW_TRANSLATION_ANTHROPIC_API_KEY=your_key
 STARDEW_TRANSLATION_ANTHROPIC_MODEL=claude-sonnet-4
-STARDEWMOD_TRANSLATION_ORIGIN_DIR=mods/default
-STARDEWMOD_TRANSLATION_ZH_DIR=mods/zh
+STARDEW_TRANSLATION_ORIGIN_DIR=mods/default
+STARDEW_TRANSLATION_ZH_DIR=mods/zh
 ```
 
 ## 配置文件格式

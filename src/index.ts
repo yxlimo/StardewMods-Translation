@@ -8,6 +8,14 @@ import { readJsonFile } from "./fileHandler";
 import { discoverMods, generateDefaultConfig } from "./modDiscovery";
 import { needsTranslation, getModVersion, updateZhManifestVersion, ensureZhManifest, compareVersions } from "./versionManager";
 import type { TranslationResult } from "./types";
+import {
+  parseNexusId,
+  getNexusCacheEntry,
+  setNexusCacheEntry,
+  getModInternalId,
+  getUpdateGroupId,
+  getLatestVersion,
+} from "./nexusApi";
 
 const DEFAULT_ORIGIN_DIR = path.resolve("mods", "default");
 const DEFAULT_ZH_DIR = path.resolve("mods", "zh");
@@ -18,7 +26,7 @@ const DEFAULT_ZH_DIR = path.resolve("mods", "zh");
  */
 function getOriginDir(options: { originDir?: string }): string {
   return options.originDir ||
-    process.env.STARDEWMOD_TRANSLATION_ORIGIN_DIR ||
+    process.env.STARDEW_TRANSLATION_ORIGIN_DIR ||
     DEFAULT_ORIGIN_DIR;
 }
 
@@ -28,7 +36,7 @@ function getOriginDir(options: { originDir?: string }): string {
  */
 function getZhDir(options: { zhDir?: string }): string {
   return options.zhDir ||
-    process.env.STARDEWMOD_TRANSLATION_ZH_DIR ||
+    process.env.STARDEW_TRANSLATION_ZH_DIR ||
     DEFAULT_ZH_DIR;
 }
 
@@ -276,6 +284,75 @@ function check(
 }
 
 /**
+ * Check-update command - check if mods have updates on NexusMods
+ */
+async function checkUpdate(options: { originDir?: string; zhDir?: string }): Promise<void> {
+  const originDir = getOriginDir(options);
+  const zhDir = getZhDir(options);
+  const apiKey = process.env.STARDEW_TRANSLATION_NEXUSMODS_API_KEY;
+
+  if (!apiKey) {
+    console.error("Error: STARDEW_TRANSLATION_NEXUSMODS_API_KEY environment variable is required");
+    return;
+  }
+
+  const mods = discoverMods(originDir, zhDir);
+  const gameDomain = "stardewvalley";
+
+  console.log("Checking for mod updates on NexusMods...\n");
+
+  for (const mod of mods) {
+    const nexusId = parseNexusId(mod.updateKeys);
+    if (!nexusId) {
+      console.log(`${mod.name}: no Nexus UpdateKeys`);
+      continue;
+    }
+
+    const localVersion = getModVersion(mod.name, false, originDir, zhDir);
+    if (!localVersion) {
+      console.log(`${mod.name}: local version not found`);
+      continue;
+    }
+
+    let remoteVersion: string | null = null;
+
+    try {
+      const cache = getNexusCacheEntry(mod.name);
+
+      if (cache?.updateGroupId) {
+        remoteVersion = await getLatestVersion(cache.updateGroupId, apiKey);
+      } else {
+        const modInternalId = await getModInternalId(gameDomain, nexusId, apiKey);
+        const updateGroupId = await getUpdateGroupId(modInternalId, apiKey);
+        remoteVersion = await getLatestVersion(updateGroupId, apiKey);
+
+        setNexusCacheEntry(mod.name, {
+          nexusId,
+          modInternalId,
+          updateGroupId,
+        });
+      }
+
+      if (!remoteVersion) {
+        console.log(`${mod.name}: unable to determine remote version`);
+        continue;
+      }
+
+      const cmp = compareVersions(remoteVersion, localVersion);
+      if (cmp > 0) {
+        console.log(`${mod.name}: update available (local: ${localVersion}, remote: ${remoteVersion})`);
+      } else if (cmp < 0) {
+        console.log(`${mod.name}: local is newer (local: ${localVersion}, remote: ${remoteVersion})`);
+      } else {
+        console.log(`${mod.name}: up to date (${localVersion})`);
+      }
+    } catch (e) {
+      console.log(`${mod.name}: error checking update - ${e}`);
+    }
+  }
+}
+
+/**
  * Pack command - create zip archive of translated mod files
  */
 async function pack(modName: string | undefined, options: { zhDir?: string }): Promise<void> {
@@ -367,6 +444,13 @@ async function main(): Promise<void> {
     .description("Pack translated mod files into zip archive (ignores manifest.json)")
     .option("--zh-dir <path>", "Specify zh translation directory")
     .action(pack);
+
+  program
+    .command("check-update")
+    .description("Check if mods have updates on NexusMods")
+    .option("--origin-dir <path>", "Specify origin (default) directory")
+    .option("--zh-dir <path>", "Specify zh translation directory")
+    .action(checkUpdate);
 
   if (process.argv.length <= 2) {
     program.parse(["node", "translator", ...process.argv.slice(2)]);

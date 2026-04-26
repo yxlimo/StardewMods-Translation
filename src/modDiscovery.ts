@@ -165,6 +165,7 @@ export function getModInfo(modPath: string, modName: string, zhDir: string): Mod
     version: manifest.Version,
     path: modPath,
     i18nFiles,
+    updateKeys: manifest.UpdateKeys,
   };
 }
 

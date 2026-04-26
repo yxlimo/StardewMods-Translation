@@ -8,7 +8,8 @@
     "translate": "bun --env-file=.env run src/index.ts translate",
     "check": "bun run src/index.ts check",
     "pack": "bun run src/index.ts pack",
-    "list": "bun run src/index.ts list"
+    "list": "bun run src/index.ts list",
+    "check-update": "bun --env-file=.env run src/index.ts check-update"
   },
   "devDependencies": {
     "@types/bun": "latest",

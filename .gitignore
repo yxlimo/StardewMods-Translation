@@ -145,3 +145,4 @@ mods/release
 # agents files
 .agents/skills
 .claude/skills
+.playwright-cli
